@@ -34,10 +34,10 @@ PR에서는 서명용 Secrets를 사용하지 않습니다.
 
 | Secret | 내용 |
 | --- | --- |
-| `SIGNING_KEYSTORE_BASE64` | 본인이 관리하는 release 키스토어의 Base64 값 |
-| `SIGNING_STORE_PASSWORD` | 키스토어 비밀번호 |
-| `SIGNING_KEY_ALIAS` | 서명 키 별칭 |
-| `SIGNING_KEY_PASSWORD` | 서명 키 비밀번호 |
+| `ANDROID_KEYSTORE_BASE64` | 본인이 관리하는 release 키스토어의 Base64 값 |
+| `ANDROID_KEYSTORE_PASSWORD` | 키스토어 비밀번호 |
+| `ANDROID_KEY_ALIAS` | 서명 키 별칭 |
+| `ANDROID_KEY_PASSWORD` | 서명 키 비밀번호 |
 
 키스토어와 비밀번호를 채팅이나 저장소에 올리지 마세요. 같은 앱의 업데이트에는 동일한 서명 키가 필요하므로 키를 안전하게 보관하세요.
 Secrets가 누락되면 release 작업은 명확하게 실패하고 서명되지 않은 APK를 배포하지 않습니다.
@@ -52,3 +52,15 @@ gradle testDebugUnitTest lintDebug assembleDebug
 ```
 
 실제 기기에서는 한국어 TTS, 화면 꺼짐, 앱 전환, 일시정지, 알림 초기화 및 서명 APK 설치를 확인하세요.
+
+## 서명 정보 자동 설정
+
+MyParkingAndroid와 동일한 Secret 이름을 사용합니다. Secret 값은 저장소별로 별도 등록해야 합니다.
+인증된 GitHub CLI와 JDK가 있는 본인 컴퓨터에서 다음 명령으로 새 키 생성, Secrets 등록, 실패한 서명 작업 재실행을 수행합니다.
+
+```sh
+bash scripts/setup-signing.sh
+```
+
+키와 비밀번호는 저장소 밖 사용자 설정 폴더에 권한을 제한해 저장됩니다. 스크립트가 표시하는 백업 폴더를 안전하게 보관하세요.
+이 스크립트는 기존 Android 서명 Secrets가 있으면 덮어쓰지 않고 중단합니다.
