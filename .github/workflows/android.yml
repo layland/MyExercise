@@ -34,7 +34,6 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     env:
-      SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
       SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
       SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
       SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
@@ -54,6 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export SIGNING_STORE_FILE="$RUNNER_TEMP/release.jks"
+          printf 'SIGNING_STORE_FILE=%s\n' "$SIGNING_STORE_FILE" >> "$GITHUB_ENV"
           for name in SIGNING_KEYSTORE_BASE64 SIGNING_STORE_PASSWORD SIGNING_KEY_ALIAS SIGNING_KEY_PASSWORD; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions Secret: $name"
@@ -76,4 +77,4 @@ jobs:
           if-no-files-found: error
       - name: Remove keystore
         if: always()
-        run: rm -f "$SIGNING_STORE_FILE"
+        run: rm -f "$RUNNER_TEMP/release.jks"
