@@ -1,0 +1,76 @@
+name: Publish MyExercise APK
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Signed APK tag (empty selects the newest build)
+        required: false
+        type: string
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: myexercise-apk-publication
+  cancel-in-progress: false
+env:
+  BUILD_REPOSITORY: layland/MyParkingAndroid
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select signed APK
+        id: apk
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: python3 scripts/select_release_apk.py >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v4
+        if: steps.apk.outputs.skip != 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        if: steps.apk.outputs.skip != 'true'
+        with:
+          packages: 'platform-tools build-tools;35.0.0'
+      - name: Download and verify original APK
+        if: steps.apk.outputs.skip != 'true'
+        env:
+          APK_URL: ${{ steps.apk.outputs.url }}
+          APK_NAME: ${{ steps.apk.outputs.name }}
+          APK_DIGEST: ${{ steps.apk.outputs.digest }}
+          APK_VERSION: ${{ steps.apk.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          curl --fail --location --retry 3 "$APK_URL" --output "dist/$APK_NAME"
+          if [ -n "$APK_DIGEST" ]; then
+            printf '%s  %s\n' "${APK_DIGEST#sha256:}" "dist/$APK_NAME" | sha256sum --check
+          fi
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "dist/$APK_NAME"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "dist/$APK_NAME" > "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "name='com.layland.myexercise'" "$RUNNER_TEMP/apk-badging.txt"
+          grep -F "versionName='$APK_VERSION'" "$RUNNER_TEMP/apk-badging.txt"
+      - name: Publish original APK in MyExercise
+        if: steps.apk.outputs.skip != 'true'
+        env:
+          APK_TAG: ${{ steps.apk.outputs.tag }}
+          APK_NAME: ${{ steps.apk.outputs.name }}
+          APK_VERSION: ${{ steps.apk.outputs.version }}
+          SOURCE_RELEASE: ${{ steps.apk.outputs.release_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest=$(sha256sum "dist/$APK_NAME" | cut -d ' ' -f 1)
+          printf 'MyExercise %s — signed Android APK\n\nOriginal signed build: %s\nSHA-256: %s\n' "$APK_VERSION" "$SOURCE_RELEASE" "$digest" > "$RUNNER_TEMP/release-notes.md"
+          if gh release view "$APK_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$APK_TAG" "dist/$APK_NAME" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$APK_TAG" "dist/$APK_NAME" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "MyExercise $APK_VERSION" --notes-file "$RUNNER_TEMP/release-notes.md" --latest
+          fi
+          gh release view "$APK_TAG" --repo "$GITHUB_REPOSITORY" --json url,assets
